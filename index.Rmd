@@ -1,0 +1,140 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "fariza"
+date: "24 December 2015"
+output: html_document
+---
+
+#Predicting using Weight Lifting Exercise Dataset
+
+###Introduction
+The goal of this project is to predict how exercise is performed. This is the "classe" variable in the training set. The performed exercise is classified into five categories: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). 
+
+###The libraries required
+
+```{r, warning=FALSE, message=FALSE}
+library(caret)
+library(randomForest)
+library(ggplot2)
+library(grid)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+```
+
+##The Dataset
+
+There are two sets of data; the training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+and test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r}
+dataWeightLift = read.csv("C:/Users/user/Documents/R/M8/projectM8/pml-training.csv",header=TRUE)
+datatest = read.csv("C:/Users/user/Documents/R/M8/projectM8/pml-testing.csv",header=TRUE)
+```
+
+###Understanding the dataset
+
+```{r}
+dim(dataWeightLift)
+str(dataWeightLift, list.len=15)
+```
+
+The raw dataset contained 19622 rows of data, with 160 variables. Many variables contained largely missing data (usually with only one row of data), so these need to be removed from the dataset. Also there are data with value that is almost 0 that can be removed.
+
+###Pre procesing the dataset
+Since there are many variables that are not complete and contains NA. We also need to reduce the dataset by removing these irrelevant columns. First we remove the first 7 columns in the dataset.
+
+```{r}
+#remove column 1 to  7
+#dataWeightLift<-dataWeightLift[c(-1)]
+dataWeightLift<-dataWeightLift[, -c(1:7)]
+#remove near zero variance data
+nzv <- nearZeroVar(dataWeightLift, saveMetrics= TRUE)
+nzv[nzv$nzv,][1:10,]
+myWLdata<-dataWeightLift[,nzv$nzv==FALSE]
+dim(myWLdata)
+#remove data with more than 60% NA
+myWL <- myWLdata
+for(i in 1:length(myWLdata)) {
+  if( sum( is.na( myWLdata[, i] ) ) /nrow(myWLdata) >= .7) {
+    for(j in 1:length(myWL)) {
+      if( length( grep(names(myWLdata[i]), names(myWL)[j]) ) == 1)  {
+        myWL <- myWL[ , -j]
+      }   
+    } 
+  }
+}
+
+# Set back to the original variable name
+myWLdata <- myWL
+rm(myWL)
+dim(myWLdata)
+```
+
+###Cross validation
+The trainig dataset is partitioned into two subsets; myTrain and myTest, using 60:40 ratio
+
+```{r}
+#partition into training and test data
+inWL<-createDataPartition(myWLdata$classe, p=0.6, list=FALSE)
+myTrain<-myWLdata[inWL,]
+myTest<-myWLdata[-inWL,]
+dim(myTrain)
+dim(myTest)
+```
+
+##Building Machine Learning Predicting Models : Decision Tree
+
+```{r}
+#Train using decision tree rpart
+fitr <- rpart(classe~., data=myTrain, method="class")
+prp(fitr)
+```
+
+```{r, warning=FALSE, message=FALSE}
+set.seed(32343)
+FITRpart<-train(classe~., data=myTrain, method="rpart")
+predictionsR <- predict(FITRpart, newdata = myTest)
+```
+
+```{r}
+confusionMatrix(predictionsR,myTest$classe)
+```
+
+##Building Machine Learning Predicting Models : GBM
+
+```{r, warning=FALSE, message=FALSE}
+set.seed(32343)
+modelFit2<-train(classe~., data=myTrain, method="gbm")
+```
+
+```{r}
+#Carryout prediction with gbm model
+predictions2<-predict(modelFit2, newdata = myTest)
+confusionMatrix(predictions2,myTest$classe)
+```
+
+
+Between the two models, gbm produces better accuracy. So prediction on out sample is done on the pml-testing.csv
+
+```{r}
+#to predict with real test data
+predictionRF<-predict(FITRpart, newdata = datatest)
+```
+
+###Discussion and conclusion
+Decision table (Rpart) predicted just 49% accuracy but the gbm or Gradient boosting predicted greater than 95%. 
+
+Thus, this model was used to run and predict the test data to be submitted to the coursera assignment submission. You can see that the prediction is as follows, and have been submitted as 20 text files.
+
+```{r}
+predictionGBM<-predict(modelFit2, newdata = datatest)
+predictionGBM
+```
+
